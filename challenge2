@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import pyrax
+import time
+
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+cs = pyrax.cloudservers
+
+for img in cs.images.list():
+    if "CentOS 6.3" in img.name:
+        image = img.id
+
+for f in cs.flavors.list():
+    if "512" in f.name:
+        flavor = f.id
+
+myServers = cs.servers.list()
+
+exists = 0
+for server in myServers:
+    if "web1" in server.name:
+        exists = 1
+        newServer = server
+
+if exists == 0:
+    print "Server Web1 does not exist.  Creating. "
+    newServer = cs.servers.create("web1", image, flavor)
+    serverID = newServer.id
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(5)
+
+
+print "Creating image from Web1. "
+newImage = newServer.create_image("Web1 Image")
+
+while cs.images.get(newImage).status !="ACTIVE":
+    time.sleep(5)
+
+print "Imaging complete.  Deploying clone.  Stand by for server info."
+for img in cs.images.list():
+    if "Web1" in img.name:
+        clonedImage = img.id
+
+clonedServer = cs.servers.create("web1 Clone", clonedImage, flavor)
+ip1 = ''
+ip2 = ''
+ipv4 = ''
+ipv6 = ''
+privateNet = ''
+
+while cs.servers.get(clonedServer).status != "ACTIVE":
+    time.sleep(5)
+
+print "============================================================="
+print "Server: Web1 Clone"
+print "Server admin password: %s" % clonedServer.adminPass
+myServer = cs.servers.get(clonedServer)
+for network, addresses in myServer.networks.items():
+    if (network == "public"):
+        ip1 = addresses[0]
+        ip2 = addresses[1]
+        if "." in ip1:
+            ipv4 = ip1
+            ipv6 = ip2
+        else:
+            ipv4 = ip2
+            ipv6 = ip1
+    elif network == "private":
+        privateNet = addresses[0]
+
+print "IPV4 Address: %s" % ipv4
+print "IPV6 Address: %s" % ipv6
+print "PrivateNet Address: %s" % privateNet
+print "============================================================="
