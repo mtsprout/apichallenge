@@ -19,36 +19,25 @@ import pyrax
 import sys
 
 if len(sys.argv) != 3:
-    print """This script takes two arguments. The first argument is the path to upload,
-the second argument is the container to upload to.
+    print """This script takes two arguments. The first argument is the FQDN,
+the second argument is the ip address.
 """
     exit(1)
 
-theDirectory = sys.argv[1]
-theContainer = sys.argv[2]
+theDomain = sys.argv[1]
+theAddress = sys.argv[2]
 
 credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
 
-cf = pyrax.cloudfiles
+dns = pyrax.cloud_dns
 
-if not os.path.isdir(theDirectory):
-    print "Invalid OS path.  Try again."
-    exit(1)
+dnsRecord = [{
+                "type" : "A",
+                "name" : theDomain,
+                "data" : theAddress,
+                "ttl"  : 300
+                }
+            ]
 
-for container in cf.list_containers():
-    if str(container) == str(theContainer):
-        exists = 1
-    else:
-        exists = 0
-
-if exists == 0:
-    print "Container %s does not exist.  Creating." % theContainer
-    myContainer = cf.create_container(theContainer)
-
-uploadList = os.listdir(theDirectory)
-
-for filename in uploadList:
-    fullPath = theDirectory + os.sep + filename
-    cksum = pyrax.utils.get_checksum(fullPath)
-    cf.upload_file(myContainer, fullPath, etag=cksum)
+newDomain = dns.create(name=theDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
