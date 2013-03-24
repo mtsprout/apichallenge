@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import pyrax
+import time
+
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+
+cs = pyrax.cloudservers
+ip1 = ""
+ip2 = ""
+ipv4 = ""
+ipv6 = ""
+privateNet = ""
+
+for img in cs.images.list():
+    if "CentOS 6.3" in img.name:
+        image = img.id
+
+for f in cs.flavors.list():
+    if "512" in f.name:
+        flavor = f.id
+
+serverNames = ['web1', 'web2', 'web3' ]
+
+print "\n\nServers building, please stand by for info..."
+
+for server in serverNames:
+    newServer = cs.servers.create(server, image, flavor)
+    password = newServer.adminPass
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(5)
+
+    print "============================================================="
+    print "Server: %s" % server
+    print "Server admin password: %s" % password
+    myServer = cs.servers.get(newServer)
+    for network, addresses in myServer.networks.items():
+        if (network == "public"):
+            ip1 = addresses[0]
+            ip2 = addresses[1]
+            if "." in ip1:
+                ipv4 = ip1
+                ipv6 = ip2
+            else:
+                ipv4 = ip2
+                ipv6 = ip1 
+        elif network == "private":
+            privateNet = addresses[0]
+
+    print "IPV4 Address: %s" % ipv4
+    print "IPV6 Address: %s" % ipv6
+    print "PrivateNet Address: %s" % privateNet
+    print "=============================================================\n"
+
