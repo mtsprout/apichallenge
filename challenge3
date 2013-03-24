@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import pyrax
+import time
+import sys
+
+if len(sys.argv) != 2:
+    print """This script takes two arguments. The first argument is the path to upload,
+the second argument is the container to upload to.
+"""
+    exit(1)
+
+theDirectory = sys.argv[1]
+theContainer = sys.argv[2]
+
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+
+cf = pyrax.cloudfiles
+
+if not os.path.isdir(theDirectory):
+    print "Invalid OS path.  Try again."
+    exit(1)
+
+for container in cf.list_containers():
+    if str(container) == str(theContainer):
+        exists = 1
+    else:
+        exists = 0
+
+if exists == 0:
+    print "Container %s does not exist.  Creating." % theContainer
+    myContainer = cf.create_container(theContainer)
+
+uploadList = os.listdir(theDirectory)
+
+for filename in uploadList:
+    fullPath = theDirectory + os.sep + filename
+    cksum = pyrax.utils.get_checksum(fullPath)
+    cf.upload_file(myContainer, fullPath, etag=cksum)
