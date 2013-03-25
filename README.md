@@ -1,3 +1,1 @@
-This isn't the way I would probably do these if they were part of a larger
-project/deployment/whatever, but we're just getting results and learning
-PyRAX, so...
+It's not crappy code if it works, right?  Right?
