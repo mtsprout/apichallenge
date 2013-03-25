@@ -16,7 +16,6 @@
 
 import os
 import pyrax
-import sys
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -41,6 +40,3 @@ dnsRecord = [{
             ]
 
 newDomain = dns.create(name=theDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
-
-
-

@@ -22,11 +22,6 @@ credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
 
 cs = pyrax.cloudservers
-ip1 = ""
-ip2 = ""
-ipv4 = ""
-ipv6 = ""
-privateNet = ""
 
 for img in cs.images.list():
     if "CentOS 6.3" in img.name:

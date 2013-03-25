@@ -42,10 +42,11 @@ if exists == 0:
     print "Server Web1 does not exist.  Creating. "
     newServer = cs.servers.create("web1", image, flavor)
     serverID = newServer.id
+    serverPass = newServer.adminPass
     while cs.servers.get(newServer).status != "ACTIVE":
         time.sleep(5)
 
-
+print "Admin password for web1: %s" % serverPass
 print "Creating image from Web1. "
 newImage = newServer.create_image("Web1 Image")
 
@@ -58,11 +59,6 @@ for img in cs.images.list():
         clonedImage = img.id
 
 clonedServer = cs.servers.create("web1 Clone", clonedImage, flavor)
-ip1 = ''
-ip2 = ''
-ipv4 = ''
-ipv6 = ''
-privateNet = ''
 
 while cs.servers.get(clonedServer).status != "ACTIVE":
     time.sleep(5)

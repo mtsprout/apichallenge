@@ -16,7 +16,6 @@
 
 import os
 import pyrax
-import sys
 import argparse
 
 parser = argparse.ArgumentParser()
