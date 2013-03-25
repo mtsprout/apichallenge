@@ -46,9 +46,4 @@ if exists == 0:
     print "Container %s does not exist.  Creating." % theContainer
     myContainer = cf.create_container(theContainer)
 
-uploadList = os.listdir(theDirectory)
-
-for filename in uploadList:
-    fullPath = theDirectory + os.sep + filename
-    cksum = pyrax.utils.get_checksum(fullPath)
-    cf.upload_file(myContainer, fullPath, etag=cksum)
+cf.sync_folder_to_container(theDirectory, theContainer)
