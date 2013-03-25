@@ -18,13 +18,63 @@ import os
 import pyrax
 import time
 
+serverInfo = {}
 credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
 
 cs = pyrax.cloudservers
-ip1 = ""
-ip2 = ""
-ipv4 = ""
-ipv6 = ""
-privateNet = ""
+lb = pyrax.cloud_loadbalancers
 
+nodes = []
+
+for img in cs.images.list():
+    if "CentOS 6.3" in img.name:
+        image = img.id
+
+for f in cs.flavors.list():
+    if "512" in f.name:
+        flavor = f.id
+
+serverNames = ['web1', 'web2']
+
+print "\n\nServers building, please stand by for info..."
+
+for server in serverNames:
+    newServer = cs.servers.create(server, image, flavor)
+    password = newServer.adminPass
+    serverID = newServer.id
+    serverInfo[serverID] = []
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(5)
+
+    print "============================================================="
+    print "Server: %s" % server
+    print "Server admin password: %s" % password
+    myServer = cs.servers.get(newServer)
+    for network, addresses in myServer.networks.items():
+        if (network == "public"):
+            ip1 = addresses[0]
+            ip2 = addresses[1]
+            if "." in ip1:
+                ipv4 = ip1
+                ipv6 = ip2
+            else:
+                ipv4 = ip2
+                ipv6 = ip1
+        elif network == "private":
+            privateNet = addresses[0]
+            serverInfo[serverID].append(privateNet)
+
+    print "IPV4 Address: %s" % ipv4
+    print "IPV6 Address: %s" % ipv6
+    print "PrivateNet Address: %s" % privateNet
+    print "=============================================================\n"
+
+nodelist = []
+
+for serverID, address in serverInfo.items():
+    nodelist.append(lb.Node(address=address[0], port=80, condition="ENABLED"))
+
+lbVip = lb.VirtualIP(type="PUBLIC")
+
+loadBalancer = lb.create("myLoadBalancer", port=80, protocol="HTTP", nodes=nodelist, virtual_ips=[lbVip])
