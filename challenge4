@@ -17,15 +17,15 @@
 import os
 import pyrax
 import sys
+import argparse
 
-if len(sys.argv) != 3:
-    print """This script takes two arguments. The first argument is the FQDN,
-the second argument is the ip address.
-"""
-    exit(1)
+parser = argparse.ArgumentParser()
+parser.add_argument("-d", "--domain", type=str, help="FQDN of record to add", required=True)
+parser.add_argument("-a", "--address", type=str, help="IP address of host.", required=True)
+args = parser.parse_args()
 
-theDomain = sys.argv[1]
-theAddress = sys.argv[2]
+theDomain = args.domain
+theAddress = args.address
 
 credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
@@ -41,3 +41,6 @@ dnsRecord = [{
             ]
 
 newDomain = dns.create(name=theDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+
+
+

@@ -17,15 +17,15 @@
 import os
 import pyrax
 import sys
+import argparse
 
-if len(sys.argv) != 3:
-    print """This script takes two arguments. The first argument is the path to upload,
-the second argument is the container to upload to.
-"""
-    exit(1)
+parser = argparse.ArgumentParser()
+parser.add_argument("-p", "--path", type=str, help="Filesystem path to sync to Cloud Files container.", required=True)
+parser.add_argument("-c", "--container", type=str, help="Cloud Files container to sync directory to.", required=True)
+args = parser.parse_args()
 
-theDirectory = sys.argv[1]
-theContainer = sys.argv[2]
+theDirectory = args.path
+theContainer = args.container
 
 credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
