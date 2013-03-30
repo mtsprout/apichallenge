@@ -33,7 +33,8 @@ for f in cs.flavors.list():
 
 serverNames = ['web1', 'web2', 'web3' ]
 
-print "\n\nServers building, please stand by for info..."
+print "\n\nServers building, please stand by for info."
+print "Grab some coffee, because this is going to take a while..."
 
 for server in serverNames:
     newServer = cs.servers.create(server, image, flavor)

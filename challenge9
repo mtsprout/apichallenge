@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import sys
+import time
+import pyrax
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--fqdn", type=str, help="FQDN for server to create.")
+parser.add_argument("-v", "--verbose", help="Full listing for servers and flavors.", action="store_true")
+parser.add_argument("-s", "--size", type=int, help="Size / flavor of server to create.")
+parser.add_argument("-i", "--image", type=int, help="OS / Image to deploy.")
+args = parser.parse_args()
+
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+
+cs = pyrax.cloudservers
+dns = pyrax.cloud_dns
+
+def listFlavors():
+    print
+    print "Available Server Flavors"
+    print "========================"
+    i = 1
+    for f in cs.flavors.list():
+        print "%s.)   %s" % (i, f.name)
+        i += 1
+
+def listImages():
+    print
+    print "Available Server Images"
+    print "======================="
+    j = 1
+    for i in cs.images.list():
+        print "%s.)  %s" % (j, i.name)
+        j += 1
+
+def validateServer(flavor, image):
+    validImages = []
+    validFlavors = []
+
+    for i in cs.images.list():
+        validImages.append(i.id)
+    for f in cs.flavors.list():
+        validFlavors.append(f.id)
+
+    for key, validFlavor in enumerate(validFlavors):
+        if key == flavor:
+            flavorID = validFlavor
+    for key, validImage in enumerate(validImages):
+        if key == image:
+            imageID = validImage
+    flavorRam = cs.flavors.get(flavorID).ram
+    imageRam = cs.images.get(imageID).minRam
+    if flavorRam < imageRam:
+        validCombo = False
+    else:
+        validCombo = True
+    return validCombo
+
+def buildServer(flavor, image, fqdn):
+    validImages = []
+    validFlavors = []
+
+    print "Building server: %s, please stand by..." % fqdn
+
+    for i in cs.images.list():
+        validImages.append(i.id)
+    for f in cs.flavors.list():
+        validFlavors.append(f.id)
+
+    for key, validFlavor in enumerate(validFlavors):
+        if key == flavor:
+            flavorID = validFlavor
+    for key, validImage in enumerate(validImages):
+        if key == image:
+            imageID = validImage
+
+
+    newServer = cs.servers.create(fqdn, imageID, flavorID)
+    password = newServer.adminPass
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(10)
+
+    print "============================================================="
+    print "Server admin password: %s" % password
+    myServer = cs.servers.get(newServer)
+    for network, addresses in myServer.networks.items():
+        if (network == "public"):
+            ip1 = addresses[0]
+            ip2 = addresses[1]
+            if "." in ip1:
+                ipv4 = ip1
+                ipv6 = ip2
+            else:
+                ipv4 = ip2
+                ipv6 = ip1
+        elif network == "private":
+            privateNet = addresses[0]
+
+    print "IPV4 Address: %s" % ipv4
+    print "IPV6 Address: %s" % ipv6
+    print "PrivateNet Address: %s" % privateNet
+    print "=============================================================\n"
+    print "Creating DNS record for %s, with address of %s." % (fqdn, ipv4)
+    dnsRecord = [{
+                "type" : "A",
+                "name" : fqdn,
+                "data" : ipv4,
+                "ttl"  : 300
+                }
+            ]
+    domainParts = fqdn.split(".")
+    thisDomain = domainParts[-2] + "." + domainParts[-1]
+    newDomain = dns.create(name=thisDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+
+
+def main():
+    if args.verbose:
+        listImages()
+        print
+        listFlavors()
+        exit(0)
+    else:
+        fqdn = args.fqdn
+        flavor = args.size - 1
+        server = args.image - 1
+        validCombo = validateServer(flavor, server)
+        if validCombo == False:
+            print "This server combination is not possible.  You will need a larger flavor."
+            sys.exit(1)
+        else:
+            buildServer(flavor, server, fqdn)
+
+if __name__ == "__main__":
+    main()
