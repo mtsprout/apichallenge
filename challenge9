@@ -51,9 +51,10 @@ def listImages():
         print "%s.)  %s" % (j, i.name)
         j += 1
 
-def validateServer(flavor, image):
+def getIdsFromNumbers(flavor, image):
     validImages = []
     validFlavors = []
+    returnValues = []
 
     for i in cs.images.list():
         validImages.append(i.id)
@@ -63,9 +64,17 @@ def validateServer(flavor, image):
     for key, validFlavor in enumerate(validFlavors):
         if key == flavor:
             flavorID = validFlavor
+            returnValues.append(flavorID)
     for key, validImage in enumerate(validImages):
         if key == image:
             imageID = validImage
+            returnValues.append(imageID)
+    return returnValues
+
+def validateServer(flavor, image):
+    newIDs = getIdsFromNumbers(flavor, image)
+    flavorID = newIDs[0]
+    imageID = newIDs[1]
     flavorRam = cs.flavors.get(flavorID).ram
     imageRam = cs.images.get(imageID).minRam
     if flavorRam < imageRam:
@@ -75,24 +84,11 @@ def validateServer(flavor, image):
     return validCombo
 
 def buildServer(flavor, image, fqdn):
-    validImages = []
-    validFlavors = []
-
+    newIDs = getIdsFromNumbers(flavor, image)
     print "Building server: %s, please stand by..." % fqdn
 
-    for i in cs.images.list():
-        validImages.append(i.id)
-    for f in cs.flavors.list():
-        validFlavors.append(f.id)
-
-    for key, validFlavor in enumerate(validFlavors):
-        if key == flavor:
-            flavorID = validFlavor
-    for key, validImage in enumerate(validImages):
-        if key == image:
-            imageID = validImage
-
-
+    flavorID = newIDs[0]
+    imageID = newIDs[1]
     newServer = cs.servers.create(fqdn, imageID, flavorID)
     password = newServer.adminPass
     while cs.servers.get(newServer).status != "ACTIVE":
