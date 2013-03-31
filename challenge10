@@ -101,10 +101,29 @@ lbVip = lb.VirtualIP(type="PUBLIC")
 
 loadBalancer = lb.create("ex10LoadBalancer", port=80, protocol="HTTP", nodes=nodelist, virtual_ips=[lbVip])
 
+vipAddress = lb.get(loadBalancer).virtual_ips[0].address
+
 while lb.get(loadBalancer).status != "ACTIVE":
     time.sleep(5)
 
-vipAddress = lb.get(loadBalancer).virtual_ips[0].address
+loadBalancer.add_health_monitor(type="HTTP", delay=10, timeout=10, attemptsBeforeDeactivation=3, path="/", statusRegex="^[234][0-9][0-9]$", bodyRegex=".* CentOS .*")
+
+while lb.get(loadBalancer).status != "ACTIVE":
+    time.sleep(10)
+
+loadBalancer.set_error_page(htmlContent)
+
+print "Creating CF Container..."
+
+cont = cf.create_container("SorryPage Container")
+cf.make_container_public(cont, ttl=86400)
+
+chksum = pyrax.utils.get_checksum(htmlContent)
+indexFile = cont.store_object("sorry.html", htmlContent, etag=chksum)
+
+print "Adding DNS Entry..."
+domainParts = fqdn.split(".")
+domainName = domainParts[-2] + "." + domainParts[-1]
 
 dnsRecord = [{
                 "type" : "A",
@@ -114,27 +133,16 @@ dnsRecord = [{
                 }
             ]
 
+for domain in dns.list():
+    if domain.name == domainName:
+        subrecord = True
+        myDomain = domain
+    else:
+        subrecord = False
 
-
-loadBalancer.add_health_monitor(type="HTTP", delay=10, timeout=10, attemptsBeforeDeactivation=3, path="/", statusRegex="^[234][0-9][0-9]$", bodyRegex=".* CentOS .*")
-
-print "Creating CF Container..."
-
-cont = cf.create_container("SorryPage Container")
-cf.make_container_public(cont, ttl=86400)
-containerUri = cont.cdn_uri
-fullSorryPath = containerUri + "/sorry.html"
-
-chksum = pyrax.utils.get_checksum(htmlContent)
-indexFile = cont.store_object("sorry.html", htmlContent, etag=chksum)
-
-print "Adding DNS Entry..."
-domainParts = fqdn.split(".")
-domainName = domainParts[-2] + "." + domainParts[-1]
-newDomain = dns.create(name=fqdn, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
-
-myLbId = lb.list()[0].id
-myLoadBalancer = lb.get(myLbId)
-myLoadBalancer.set_error_page(htmlContent)
+if subrecord is True:
+    newRecord = dns.add_record(myDomain, dnsRecord)
+else:
+    newDomain = dns.create(name=domainName, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
 
 print "Complete."
