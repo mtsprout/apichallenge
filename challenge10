@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import time
+import pyrax
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--fqdn", type=str, help="FQDN for server to create.", required=True)
+args = parser.parse_args()
+fqdn = args.fqdn
+
+serverInfo = {}
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+
+cs = pyrax.cloudservers
+lb = pyrax.cloud_loadbalancers
+cf = pyrax.cloudfiles
+dns = pyrax.cloud_dns
+
+nodes = []
+
+for img in cs.images.list():
+    if "CentOS 6.3" in img.name:
+        image = img.id
+
+for f in cs.flavors.list():
+    if "512" in f.name:
+        flavor = f.id
+
+serverNames = ['web1', 'web2']
+sshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDQ+eI+8S6NFunPGF/dPbc+aWOnnLoUe703AYLinKd3Kw0EH/7qGlUIfjFAs6ehrDYmcdGNUXqhsk4JHk0gn8jJc1Wo64STnKpkE0rZvRnWboF49T6fmmhZhfIIvQ/F7gCkv5JaDv+5iK5wGgF54M9KVio+lzenjAYGM5/+nP7R7lR/dMlbKR5QpSFCBbvLVJYGV8mIqXi9XziyGpZ5GQUOTkREKyNd66JDQKO3vl8jg/23m5ROIJpHYjv3OgIlM8qZTXrRDo+6bBjPAOEl+cXURAW6uDz4Voj7q34mglqfu31DK4OtrAy9K0os+/7j7qivRqd3lyyx6UjLEgaV+iaN crai3943@whtnrdy"
+myFile = { "/root/.ssh/authorized_keys" : sshKey }
+
+print "\n\nServers building, please stand by for info..."
+
+for server in serverNames:
+    newServer = cs.servers.create(server, image, flavor, files=myFile)
+    password = newServer.adminPass
+    serverID = newServer.id
+    serverInfo[serverID] = []
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(5)
+
+    print "============================================================="
+    print "Server: %s" % server
+    print "Server admin password: %s" % password
+    myServer = cs.servers.get(newServer)
+    for network, addresses in myServer.networks.items():
+        if (network == "public"):
+            ip1 = addresses[0]
+            ip2 = addresses[1]
+            if "." in ip1:
+                ipv4 = ip1
+                ipv6 = ip2
+            else:
+                ipv4 = ip2
+                ipv6 = ip1
+        elif network == "private":
+            privateNet = addresses[0]
+            serverInfo[serverID].append(privateNet)
+
+    print "IPV4 Address: %s" % ipv4
+    print "IPV6 Address: %s" % ipv6
+    print "PrivateNet Address: %s" % privateNet
+    print "=============================================================\n"
+
+print"\nConfiguring Load Balancer..."
+
+htmlContent="""<html>
+<head>
+    <title>Ya Done Messed Up</title>
+</head>
+<body>
+<h1>Ya Done Messed Up</h1>
+<h2>No content here.</h2>
+</body>
+</html>"""
+
+nodelist = []
+
+for serverID, address in serverInfo.items():
+    nodelist.append(lb.Node(address=address[0], port=80, condition="ENABLED"))
+
+lbVip = lb.VirtualIP(type="PUBLIC")
+
+loadBalancer = lb.create("ex10LoadBalancer", port=80, protocol="HTTP", nodes=nodelist, virtual_ips=[lbVip])
+
+while lb.get(loadBalancer).status != "ACTIVE":
+    time.sleep(5)
+
+vipAddress = lb.get(loadBalancer).virtual_ips[0].address
+
+dnsRecord = [{
+                "type" : "A",
+                "name" : fqdn,
+                "data" : vipAddress,
+                "ttl"  : 300
+                }
+            ]
+
+
+
+loadBalancer.add_health_monitor(type="HTTP", delay=10, timeout=10, attemptsBeforeDeactivation=3, path="/", statusRegex="^[234][0-9][0-9]$", bodyRegex=".* CentOS .*")
+
+print "Creating CF Container..."
+
+cont = cf.create_container("SorryPage Container")
+cf.make_container_public(cont, ttl=86400)
+containerUri = cont.cdn_uri
+fullSorryPath = containerUri + "/sorry.html"
+
+chksum = pyrax.utils.get_checksum(htmlContent)
+indexFile = cont.store_object("sorry.html", htmlContent, etag=chksum)
+
+print "Adding DNS Entry..."
+domainParts = fqdn.split(".")
+domainName = domainParts[-2] + "." + domainParts[-1]
+newDomain = dns.create(name=fqdn, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+
+myLbId = lb.list()[0].id
+myLoadBalancer = lb.get(myLbId)
+myLoadBalancer.set_error_page(htmlContent)
+
+print "Complete."
