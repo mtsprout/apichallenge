@@ -48,6 +48,7 @@ sshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDQ+eI+8S6NFunPGF/dPbc+aWOnnLoUe7
 myFile = { "/root/.ssh/authorized_keys" : sshKey }
 
 print "\n\nServers building, please stand by for info..."
+print "This can take upwards of 10 minutes, so please be patient."
 
 for server in serverNames:
     newServer = cs.servers.create(server, image, flavor, files=myFile)
