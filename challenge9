@@ -124,7 +124,17 @@ def buildServer(flavor, image, fqdn):
             ]
     domainParts = fqdn.split(".")
     thisDomain = domainParts[-2] + "." + domainParts[-1]
-    newDomain = dns.create(name=thisDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+    for domain in dns.list():
+        if domain.name == thisDomain:
+            subrecord = True
+            myDomain = domain
+            break
+        else:
+            subrecord = False
+    if subrecord is True:
+        newRecord = dns.add_record(myDomain, dnsRecord)
+    else:
+        newDomain = dns.create(name=thisDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
 
 
 def main():
