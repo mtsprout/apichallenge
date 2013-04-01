@@ -92,7 +92,7 @@ def buildServer(flavor, image, fqdn):
     newServer = cs.servers.create(fqdn, imageID, flavorID)
     password = newServer.adminPass
     while cs.servers.get(newServer).status != "ACTIVE":
-        time.sleep(10)
+        time.sleep(5)
 
     print "============================================================="
     print "Server admin password: %s" % password

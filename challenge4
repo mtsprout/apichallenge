@@ -47,6 +47,7 @@ for domain in dns.list():
     if testDomain == domainName:
         subrecord = True
         myDomain  = domain
+        break
     else:
         subrecord = False
 
