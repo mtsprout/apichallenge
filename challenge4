@@ -29,6 +29,9 @@ theAddress = args.address
 credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
 pyrax.set_credential_file(credsFile)
 
+domainParts = theDomain.split(".")
+domainName = domainParts[-2] + "." + domainParts[-1]
+
 dns = pyrax.cloud_dns
 
 dnsRecord = [{
@@ -39,4 +42,15 @@ dnsRecord = [{
                 }
             ]
 
-newDomain = dns.create(name=theDomain, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+for domain in dns.list():
+    testDomain = str(domain.name)
+    if testDomain == domainName:
+        subrecord = True
+        myDomain  = domain
+    else:
+        subrecord = False
+
+if subrecord is True:
+    newRecord = dns.add_record(myDomain, dnsRecord)
+else:
+    newDomain = dns.create(name=domainName, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
