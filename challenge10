@@ -19,8 +19,8 @@ import time
 import pyrax
 import argparse
 
-parser = argparse.ArgumentParser(description="This script will create two CentOS 6.3 servers, copy the ssh key to /root/.ssh/authorized keys, create a load balancer with the servers behind them with a custom error page, copy that error page into Cloud Files, and also create a DNS entry for the load balancer, as specified by the -f flag.")
-parser.add_argument("-f", "--fqdn", type=str, help="FQDN to be created on the load balancer.", required=True)
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--fqdn", type=str, help="FQDN for server to create.", required=True)
 args = parser.parse_args()
 fqdn = args.fqdn
 

@@ -18,7 +18,7 @@ import os
 import pyrax
 import argparse
 
-parser = argparse.ArgumentParser(description="Specify a file path and Cloud Files container.  This script will sync the contents of your directory to the Cloud Files container.  If the container does not exist, it will be created.")
+parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--path", type=str, help="Filesystem path to sync to Cloud Files container.", required=True)
 parser.add_argument("-c", "--container", type=str, help="Cloud Files container to sync directory to.", required=True)
 args = parser.parse_args()

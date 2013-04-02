@@ -20,8 +20,8 @@ import time
 import pyrax
 import argparse
 
-parser = argparse.ArgumentParser(description="This script will create a cloud server with the specified OS and flavor with the FQDN specified.  After the server is created, an A record will be created for the FQDN.  Use the --verbose option to see valid numerical values for image and flavor." )
-parser.add_argument("-f", "--fqdn", type=str, help="FQDN for server being created.")
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--fqdn", type=str, help="FQDN for server to create.")
 parser.add_argument("-v", "--verbose", help="Full listing for servers and flavors.", action="store_true")
 parser.add_argument("-s", "--size", type=int, help="Size / flavor of server to create.")
 parser.add_argument("-i", "--image", type=int, help="OS / Image to deploy.")
