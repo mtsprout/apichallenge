@@ -18,7 +18,7 @@ import os
 import pyrax
 import argparse
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Given an FQDN of a host, and an IP address, this script will create an A record for that host in the domain.  If the domain does not exist, it will be created.")
 parser.add_argument("-d", "--domain", type=str, help="FQDN of record to add", required=True)
 parser.add_argument("-a", "--address", type=str, help="IP address of host.", required=True)
 args = parser.parse_args()
