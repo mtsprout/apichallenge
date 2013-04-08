@@ -1,0 +1,165 @@
+#!/usr/bin/env python
+
+# Copyright 2013 Craig Sprout
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+import os
+import time
+import pyrax
+import argparse
+import OpenSSL
+from OpenSSL import crypto, SSL
+
+parser = argparse.ArgumentParser(description="This script will create three CentOS 6.3 servers, create a load balancer with the servers behind them.  An SSL cert will be generated, and SSL will be terminated on the load balancer  Finally, it will create a DNS entry for the load balancer, as specified by the -f flag.")
+parser.add_argument("-f", "--fqdn", type=str, help="FQDN to be created on the load balancer.", required=True)
+args = parser.parse_args()
+fqdn = args.fqdn
+
+serverInfo = {}
+credsFile = os.path.expanduser("~/.rackspace_cloud_credentials")
+pyrax.set_credential_file(credsFile)
+
+cs = pyrax.cloudservers
+lb = pyrax.cloud_loadbalancers
+cf = pyrax.cloudfiles
+dns = pyrax.cloud_dns
+cbs = pyrax.cloud_blockstorage
+cnets = pyrax.cloud_networks
+
+internalNetwork = cnets.create("PrivateLAN", cidr="192.168.100.0/24")
+
+print internalNetwork
+
+serverNetworks = internalNetwork.get_server_networks(public=True, private=True)
+
+nodes = []
+
+for img in cs.images.list():
+    if "CentOS 6.3" in img.name:
+        image = img.id
+
+for f in cs.flavors.list():
+    if "512" in f.name:
+        flavor = f.id
+
+serverNames = ['web1', 'web2', 'web3']
+
+print "\n\nServers building, please stand by for info..."
+print "This can take upwards of 20 minutes, so please be patient."
+
+for server in serverNames:
+    volume = cbs.create(name=server, size=500)
+    newServer = cs.servers.create(server, image, flavor, networks=serverNetworks)
+    password = newServer.adminPass
+    serverID = newServer.id
+    serverInfo[serverID] = []
+    while cs.servers.get(newServer).status != "ACTIVE":
+        time.sleep(5)
+
+    volume.attach_to_instance(newServer, mountpoint="/dev/xvdb")
+    print "============================================================="
+    print "Server: %s" % server
+    print "Server admin password: %s" % password
+    myServer = cs.servers.get(newServer)
+    for network, addresses in myServer.networks.items():
+        if (network == "public"):
+            ip1 = addresses[0]
+            ip2 = addresses[1]
+            if "." in ip1:
+                ipv4 = ip1
+                ipv6 = ip2
+            else:
+                ipv4 = ip2
+                ipv6 = ip1
+        elif network == "private":
+            privateNet = addresses[0]
+            serverInfo[serverID].append(privateNet)
+
+    print "IPV4 Address: %s" % ipv4
+    print "IPV6 Address: %s" % ipv6
+    print "PrivateNet Address: %s" % privateNet
+    print "To connect to this server, issue the following command:"
+    print "    ssh root@%s" % ipv4
+    print "=============================================================\n"
+
+print"\nConfiguring Load Balancer..."
+
+ # create a key pair
+k = crypto.PKey()
+k.generate_key(crypto.TYPE_RSA, 1024)
+
+# create a self-signed cert
+cert = crypto.X509()
+cert.get_subject().C = "US"
+cert.get_subject().ST = "Texas"
+cert.get_subject().L = "San Antonio"
+cert.get_subject().O = "Rackspace"
+cert.get_subject().OU = "Support"
+cert.set_serial_number(1000)
+cert.gmtime_adj_notBefore(0)
+cert.gmtime_adj_notAfter(10*365*24*60*60)
+cert.set_issuer(cert.get_subject())
+cert.set_pubkey(k)
+cert.sign(k, 'sha1')
+
+theCert = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
+theKey = crypto.dump_privatekey(crypto.FILETYPE_PEM, k)
+
+nodelist = []
+
+for serverID, address in serverInfo.items():
+    nodelist.append(lb.Node(address=address[0], port=80, condition="ENABLED"))
+
+lbVip = lb.VirtualIP(type="PUBLIC")
+
+loadBalancer = lb.create("ex11LoadBalancer", port=80, protocol="HTTP", nodes=nodelist, virtual_ips=[lbVip])
+
+vipAddress = lb.get(loadBalancer).virtual_ips[0].address
+
+while lb.get(loadBalancer).status != "ACTIVE":
+    time.sleep(5)
+
+loadBalancer.add_ssl_termination(securePort=443, enabled=True, secureTrafficOnly=False, certificate=theCert, privatekey=theKey)
+
+while lb.get(loadBalancer).status != "ACTIVE":
+    time.sleep(5)
+
+loadBalancer.add_health_monitor(type="HTTP", delay=10, timeout=10, attemptsBeforeDeactivation=3, path="/", statusRegex="^[234][0-9][0-9]$", bodyRegex=".* CentOS .*")
+
+print "Adding DNS Entry..."
+domainParts = fqdn.split(".")
+domainName = domainParts[-2] + "." + domainParts[-1]
+
+dnsRecord = [{
+                "type" : "A",
+                "name" : fqdn,
+                "data" : vipAddress,
+                "ttl"  : 300
+                }
+            ]
+
+for domain in dns.list():
+    if domain.name == domainName:
+        subrecord = True
+        myDomain = domain
+        break
+    else:
+        subrecord = False
+
+if subrecord is True:
+    newRecord = dns.add_record(myDomain, dnsRecord)
+else:
+    newDomain = dns.create(name=domainName, comment="Primary Domain", emailAddress="sample@example.com", records=dnsRecord)
+
+print "Complete."
